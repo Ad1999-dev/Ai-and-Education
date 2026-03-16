@@ -1,2 +1,3 @@
-# Ai-and-Education
-PROJ0021 Data science project - Ai and Education
+# Ai and education
+Spring 2026 - Uliège master in data science engineering - PROJ0021 Data science project
+Theme : Ai and education

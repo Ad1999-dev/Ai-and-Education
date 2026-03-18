@@ -6,7 +6,7 @@ Theme : Ai and education
 
 ## How we work (GitFlow)
 
-* `main`: milestone-ready only (submission branch)
+* `main`: milestone-ready only
 * `develop`: integration branch
 * `feature/*`: development branches
 

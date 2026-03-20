@@ -1,0 +1,87 @@
+def create_frequency_tables(document, n):
+    """
+    This function constructs a list of `n` frequency tables for an n-gram model, each table capturing character frequencies with increasing conditional dependencies.
+
+    - **Parameters**:
+        - `document`: The text document used to train the model.
+        - `n`: The number of value of `n` for the n-gram model.
+
+    - **Returns**:
+        - Returns a list of n frequency tables.
+    """
+    # We will represent the frequency table as a dictionary
+    # Key: n-gram
+    # Value: frequency
+    
+    # List of dictionaries (i.e. frequency tables)
+    ret = []
+    
+    # Edge case: consider the "0-gram", which simply is a frequency table with the size of the corpus as its value
+    ret.append({"" : len(document)})
+    
+    for i in range(n+1):
+        freq = {}
+        right = i
+        for left in range(len(document)-i):
+            gram = document[left:right+1]
+            freq[gram] = freq.get(gram, 0) + 1
+            right += 1
+        ret.append(freq)
+        
+    return ret
+
+
+def calculate_probability(sequence, char, tables):
+    """
+    Calculates the probability of observing a given sequence of characters using the frequency tables.
+
+    - **Parameters**:
+        - `sequence`: The sequence of characters whose probability we want to compute.
+        - `tables`: The list of frequency tables created by `create_frequency_tables()`, this will be of size `n`.
+        - `char`: The character whose probability of occurrence after the sequence is to be calculated.
+
+    - **Returns**:
+        - Returns a probability value for the sequence.
+    """
+    
+    # By n-gram model, P(seq + char | seq) = freq(seq + char) / freq(seq) where seq has length at most n - 1
+    
+    n = len(tables) - 1
+    seq = sequence[1-n:] # last n-1 characters of sequence
+    
+    # seq should be at most n characters
+    def count(seq):
+        return tables[len(seq)].get(seq, 0)
+     
+    try:
+        return count(seq + char) / count(seq)
+    except ZeroDivisionError:
+        return 0
+
+
+def predict_next_char(sequence, tables, vocabulary):
+    """
+    Predicts the most likely next character based on the given sequence.
+
+    - **Parameters**:
+        - `sequence`: The sequence used as input to predict the next character.
+        - `tables`: The list of frequency tables.
+        - `vocabulary`: The set of possible characters.
+    
+    - **Functionality**:
+        - Calculates the probability of each possible next character in the vocabulary, using `calculate_probability()`.
+
+    - **Returns**:
+        - Returns the character with the maximum probability as the predicted next character.
+    """
+    
+    highest_prob = -1
+    ret = ''
+    
+    for char in vocabulary:
+        prob = calculate_probability(sequence, char, tables)
+        if prob > highest_prob:
+            highest_prob = prob
+            ret = char
+    
+    return ret

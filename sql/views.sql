@@ -32,6 +32,7 @@ SELECT
     dt.prompt,
     dt.response,
     dt.llm_label,
+    dt.llm_sublabel,
     dt.llm_justification
 FROM dialogue_turns dt
 JOIN chats c

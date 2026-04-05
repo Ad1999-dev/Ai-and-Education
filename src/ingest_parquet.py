@@ -78,27 +78,42 @@ def build_assignment_id(semester: Any, topic: Any) -> Optional[str]:
     return f"{semester_str}_{topic_str}"
 
 
-def extract_llm_fields(row: pd.Series) -> Tuple[Optional[str], Optional[str]]:
+def split_label(raw_label: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Split 'Category > Subcategory' into (label, sublabel). Returns (label, None) if no '>'."""
+    if raw_label is None:
+        return None, None
+    if ">" in raw_label:
+        label, sublabel = raw_label.split(">", 1)
+        return label.strip() or None, sublabel.strip() or None
+    return raw_label.strip() or None, None
+
+
+def extract_llm_fields(row: pd.Series) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Return (llm_label, llm_sublabel, llm_justification)."""
     if "llm_label" in row.index:
         raw = safe_null(row["llm_label"])
         if isinstance(raw, dict):
-            return safe_null(raw.get("label")), safe_null(raw.get("justification"))
+            label, sublabel = split_label(safe_null(raw.get("label")))
+            return label, sublabel, safe_null(raw.get("justification"))
         if isinstance(raw, str):
             raw_str = raw.strip()
             if raw_str.startswith("{") and raw_str.endswith("}"):
                 try:
                     parsed = json.loads(raw_str)
-                    return safe_null(parsed.get("label")), safe_null(parsed.get("justification"))
+                    label, sublabel = split_label(safe_null(parsed.get("label")))
+                    return label, sublabel, safe_null(parsed.get("justification"))
                 except Exception:
-                    return raw_str, None
-            return raw_str, None
+                    label, sublabel = split_label(raw_str)
+                    return label, sublabel, None
+            label, sublabel = split_label(raw_str)
+            return label, sublabel, None
 
-    label = None
+    raw_label = None
     justification = None
 
     for col in ["label", "llm_label_label", "llm_label.label"]:
         if col in row.index:
-            label = safe_null(row[col])
+            raw_label = safe_null(row[col])
             break
 
     for col in ["justification", "llm_justification", "llm_label_justification", "llm_label.justification"]:
@@ -106,7 +121,8 @@ def extract_llm_fields(row: pd.Series) -> Tuple[Optional[str], Optional[str]]:
             justification = safe_null(row[col])
             break
 
-    return label, justification
+    label, sublabel = split_label(raw_label)
+    return label, sublabel, justification
 
 
 def ensure_message_list(value: Any) -> List[Dict]:
@@ -210,6 +226,7 @@ def main():
             prompt,
             response,
             llm_label,
+            llm_sublabel,
             llm_justification
         )
         VALUES (
@@ -220,6 +237,7 @@ def main():
             :prompt,
             :response,
             :llm_label,
+            :llm_sublabel,
             :llm_justification
         )
         ON CONFLICT (chat_id, interaction_count) DO UPDATE
@@ -229,6 +247,7 @@ def main():
             prompt = EXCLUDED.prompt,
             response = EXCLUDED.response,
             llm_label = EXCLUDED.llm_label,
+            llm_sublabel = EXCLUDED.llm_sublabel,
             llm_justification = EXCLUDED.llm_justification
         """
     )
@@ -329,7 +348,7 @@ def main():
             if chat_id is None or interaction_count is None or prompt is None:
                 continue
 
-            llm_label, llm_justification = extract_llm_fields(row)
+            llm_label, llm_sublabel, llm_justification = extract_llm_fields(row)
             assignment_id = build_assignment_id(row.get("semester"), row.get("topic"))
 
             turn_records.append(
@@ -341,6 +360,7 @@ def main():
                     "prompt": str(prompt),
                     "response": safe_null(row.get("response")),
                     "llm_label": llm_label,
+                    "llm_sublabel": llm_sublabel,
                     "llm_justification": llm_justification,
                 }
             )

@@ -41,6 +41,7 @@ CREATE TABLE dialogue_turns (
     prompt TEXT NOT NULL,
     response TEXT,
     llm_label TEXT,
+    llm_sublabel TEXT,
     llm_justification TEXT,
     PRIMARY KEY (chat_id, interaction_count),
     CONSTRAINT fk_dialogue_turns_chat

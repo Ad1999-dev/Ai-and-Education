@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
 DEFAULT_GRADES_DIR = PROJECT_ROOT / "data" / "raw" / "grades"
 GRADES_GLOB = "*_grades_released_normalized.csv"

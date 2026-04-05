@@ -4,12 +4,13 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, List, Dict, Optional, Tuple, Union
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
 DEFAULT_PARQUET_DIR = PROJECT_ROOT / "data" / "raw" / "parquet"
 
@@ -129,6 +130,10 @@ def ensure_message_list(value: Any) -> List[Dict]:
     value = safe_null(value)
     if value is None:
         return []
+
+    # pyarrow ≤17 reads list<struct> columns as numpy arrays of dicts
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
 
     if isinstance(value, list):
         result = []

@@ -1,0 +1,15 @@
+# Copy this file to .env
+
+POSTGRES_DB=studychat
+POSTGRES_USER=studychat_user
+POSTGRES_PASSWORD=studychat_password
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=studychat
+DB_USER=studychat_user
+DB_PASSWORD=studychat_password
+
+PGADMIN_DEFAULT_EMAIL=studychat@gmail.com
+PGADMIN_DEFAULT_PASSWORD=admin123
+PGADMIN_PORT=8081

@@ -79,6 +79,35 @@ def build_assignment_id(semester: Any, topic: Any) -> Optional[str]:
     return f"{semester_str}_{topic_str}"
 
 
+# Mapping from assignment_code to the exam_code it precedes.
+# e1 covers a1, a2.  e2 covers a3, a4.
+# a5–a7 map to None: e3 is the final exam covering the whole semester and
+# is excluded from per-assessment dialogue features by design.
+_ASSIGNMENT_TO_EXAM: dict[str, str] = {
+    "a1": "e1", "a2": "e1",
+    "a3": "e2", "a4": "e2",
+}
+
+
+def build_exam_id(semester: Any, topic: Any) -> Optional[str]:
+    """Return the assessment_id of the exam that follows this assignment.
+
+    Returns None for a5–a7 (final exam excluded) and for any non-assignment topic.
+    """
+    semester = safe_null(semester)
+    topic = safe_null(topic)
+    if semester is None or topic is None:
+        return None
+
+    semester_str = str(semester).strip().lower()
+    topic_str    = str(topic).strip().lower()
+
+    exam_code = _ASSIGNMENT_TO_EXAM.get(topic_str)
+    if exam_code is None:
+        return None
+    return f"{semester_str}_{exam_code}"
+
+
 def split_label(raw_label: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
     """Split 'Category > Subcategory' into (label, sublabel). Returns (label, None) if no '>'."""
     if raw_label is None:
@@ -227,6 +256,7 @@ def main():
             chat_id,
             interaction_count,
             assignment_id,
+            exam_id,
             turn_timestamp,
             prompt,
             response,
@@ -238,6 +268,7 @@ def main():
             :chat_id,
             :interaction_count,
             :assignment_id,
+            :exam_id,
             :turn_timestamp,
             :prompt,
             :response,
@@ -248,6 +279,7 @@ def main():
         ON CONFLICT (chat_id, interaction_count) DO UPDATE
         SET
             assignment_id = EXCLUDED.assignment_id,
+            exam_id       = EXCLUDED.exam_id,
             turn_timestamp = EXCLUDED.turn_timestamp,
             prompt = EXCLUDED.prompt,
             response = EXCLUDED.response,
@@ -355,12 +387,14 @@ def main():
 
             llm_label, llm_sublabel, llm_justification = extract_llm_fields(row)
             assignment_id = build_assignment_id(row.get("semester"), row.get("topic"))
+            exam_id       = build_exam_id(row.get("semester"), row.get("topic"))
 
             turn_records.append(
                 {
                     "chat_id": str(chat_id),
                     "interaction_count": int(interaction_count),
                     "assignment_id": assignment_id,
+                    "exam_id":       exam_id,
                     "turn_timestamp": to_python_datetime(row.get("timestamp")),
                     "prompt": str(prompt),
                     "response": safe_null(row.get("response")),

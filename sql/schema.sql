@@ -37,6 +37,10 @@ CREATE TABLE dialogue_turns (
     chat_id TEXT NOT NULL,
     interaction_count INTEGER NOT NULL,
     assignment_id TEXT NULL REFERENCES assignments(assignment_id) ON DELETE SET NULL,
+    -- exam_id: derived from assignment_id via the mapping a1/a2→e1, a3/a4→e2.
+    -- a5–a7 map to NULL (final exam e3 covers the whole semester, excluded by design).
+    -- Stored as plain TEXT (no FK) because assessments are loaded after parquet ingestion.
+    exam_id TEXT NULL,
     turn_timestamp TIMESTAMP NULL,
     prompt TEXT NOT NULL,
     response TEXT,
@@ -140,6 +144,9 @@ CREATE INDEX idx_chats_semester_code
 
 CREATE INDEX idx_dialogue_turns_assignment_id
     ON dialogue_turns(assignment_id);
+
+CREATE INDEX idx_dialogue_turns_exam_id
+    ON dialogue_turns(exam_id);
 
 CREATE INDEX idx_dialogue_turns_timestamp
     ON dialogue_turns(turn_timestamp);

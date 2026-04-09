@@ -1,0 +1,97 @@
+"""Central configuration for the ML pipeline.
+
+Edit this file to change the default behaviour.  All settings can be
+overridden via CLI flags in the run_training_*.py entry points.
+"""
+from enum import Enum
+
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.linear_model import ElasticNet, Ridge
+from sklearn.svm import SVR
+
+
+# ---------------------------------------------------------------------------
+# Assessment codes
+# ---------------------------------------------------------------------------
+EXAM_ASSESSMENT_CODES: list[str] = ["e1", "e2", "e3"]
+# a1 excluded: baseline assignment, treated as context rather than target.
+ASSIGNMENT_ASSESSMENT_CODES: list[str] = ["a2", "a3", "a4", "a5", "a6", "a7"]
+
+
+# ---------------------------------------------------------------------------
+# Strategy enums — select how each feature dimension is computed
+# ---------------------------------------------------------------------------
+class AssessmentEncoding(str, Enum):
+    ONE_HOT  = "one_hot"   # binary column per assessment code
+    ORDINAL  = "ordinal"   # single integer column (lexicographic order)
+    NONE     = "none"      # drop assessment identity entirely
+
+
+class DialogueStrategy(str, Enum):
+    PER_ASSESSMENT = "per_assessment"  # per assessment: assignment turns via assignment_id,
+                                       # exam turns via exam_id (a1/a2→e1, a3/a4→e2)
+
+
+class SubmissionStrategy(str, Enum):
+    PER_ASSIGNMENT = "per_assignment"  # single row for the linked assignment_id
+
+
+# ---------------------------------------------------------------------------
+# Feature blocks — set False to exclude a block entirely
+# ---------------------------------------------------------------------------
+FEATURE_CONFIG: dict[str, bool] = {
+    "dialogue_counts":     True,   # n_turns, n_chats, n_assignments_with_dialogue
+    "dialogue_lengths":    True,   # avg/total prompt & response character lengths
+    "dialogue_categories": True,   # llm_label proportions
+    "submission_features": True,   # lines of code, file counts, submission types
+}
+
+# ---------------------------------------------------------------------------
+# Cross-validation
+# ---------------------------------------------------------------------------
+OUTER_CV_SPLITS: int = 5
+INNER_CV_SPLITS: int = 5
+RANDOM_STATE:    int = 42
+SCORING:         str = "neg_root_mean_squared_error"
+
+# ---------------------------------------------------------------------------
+# Model registry
+# Keys in param_grid must use the "model__" prefix (sklearn Pipeline convention).
+# ---------------------------------------------------------------------------
+MODEL_REGISTRY: dict[str, tuple] = {
+    "ridge": (
+        Ridge(),
+        {"model__alpha": [0.01, 0.1, 1.0, 10.0, 100.0]},
+    ),
+    "elastic_net": (
+        ElasticNet(max_iter=5000),
+        {
+            "model__alpha": [0.01, 0.1, 1.0, 10.0],
+            "model__l1_ratio": [0.2, 0.5, 0.8],
+        },
+    ),
+    "random_forest": (
+        RandomForestRegressor(random_state=RANDOM_STATE),
+        {
+            "model__n_estimators": [50, 100, 200],
+            "model__max_depth": [None, 5, 10],
+            "model__min_samples_leaf": [1, 3, 5],
+        },
+    ),
+    "gradient_boosting": (
+        GradientBoostingRegressor(random_state=RANDOM_STATE),
+        {
+            "model__n_estimators": [50, 100, 200],
+            "model__learning_rate": [0.05, 0.1, 0.2],
+            "model__max_depth": [2, 3, 5],
+        },
+    ),
+    "svr": (
+        SVR(),
+        {
+            "model__C": [0.1, 1.0, 10.0],
+            "model__epsilon": [0.05, 0.1, 0.2],
+            "model__kernel": ["rbf", "linear"],
+        },
+    ),
+}

@@ -26,7 +26,7 @@ python -m src.ml.run_training_exam \
     --drop-no-dialogue \
     --features dlg_n_turns dlg_n_chats dlg_avg_prompt_chars \
     --models ridge random_forest \
-    --outer 10 --inner 5 \
+    --outer 5 --inner 5 \
     --output results/
 
 # Full args — assignment pipeline
@@ -35,7 +35,7 @@ python -m src.ml.run_training_assignment \
     --drop-no-dialogue \
     --features dlg_n_turns dlg_n_chats dlg_avg_prompt_chars \
     --models ridge random_forest \
-    --outer 10 --inner 5 \
+    --outer 5 --inner 5 \
     --output results/
 
 # Full args — both pipeline
@@ -44,7 +44,7 @@ python -m src.ml.run_training_both \
     --drop-no-dialogue \
     --features dlg_n_turns dlg_n_chats dlg_avg_prompt_chars \
     --models ridge random_forest \
-    --outer 10 --inner 5 \
+    --outer 5 --inner 5 \
     --output results/
 ```
 

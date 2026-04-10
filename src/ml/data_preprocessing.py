@@ -24,6 +24,7 @@ def build_dataset(
     base: pd.DataFrame,
     pipeline_type: str,
     drop_no_dialogue: bool = False,
+    drop_zero_score: bool = False,
     select_features: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """Merge all feature blocks onto the base frame.
@@ -35,6 +36,9 @@ def build_dataset(
     pipeline_type    : "exam", "assignment", or "both".
     drop_no_dialogue : If True, remove rows where the student had zero dialogue
                        activity during that assessment period (all dlg_* == 0).
+    drop_zero_score  : If True, remove rows where the student's score is exactly 0
+                       (i.e. did not submit / received no credit).  Distinct from
+                       NULL rows, which are already excluded by data_loader.
     select_features  : If provided, keep only these columns from X (plus the
                        structural columns assessment_code / is_exam which are
                        always kept).  Raises ValueError for unknown column names.
@@ -76,6 +80,17 @@ def build_dataset(
 
     # Debugging - check for any remaining NaNs
     X.to_csv("debug_X_after_zero_fill.csv")
+
+    # ------------------------------------------------------------------
+    # Optional: drop rows where the student received a score of exactly 0
+    # (non-submission recorded as 0, not NULL)
+    # ------------------------------------------------------------------
+    if drop_zero_score:
+        nonzero_mask = base["target"] != 0
+        n_dropped = int((~nonzero_mask).sum())
+        X = X[nonzero_mask]
+        base = base.loc[nonzero_mask]
+        print(f"[data_preprocessing] drop_zero_score: removed {n_dropped} rows with score == 0")
 
     # ------------------------------------------------------------------
     # Optional: drop rows with no dialogue activity during the assessment

@@ -69,8 +69,12 @@ from src.ml.model_training import (
     make_run_dir,
     print_summary,
     run_nested_cv,
+    save_correlation_matrix,
     save_dataset,
+    save_feature_importance,
     save_model,
+    save_prediction_error_plot,
+    save_predictions,
     save_results,
     train_final_model,
 )
@@ -91,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         "--drop-no-dialogue",
         action="store_true", dest="drop_no_dialogue",
         help="Drop rows where the student had zero dialogue activity for that assessment",
+    )
+    parser.add_argument(
+        "--drop-zero-score",
+        action="store_true", dest="drop_zero_score",
+        help="Drop rows where the student received a score of exactly 0 (non-submission)",
     )
     parser.add_argument(
         "--features",
@@ -136,6 +145,7 @@ def main() -> None:
         base=base,
         pipeline_type="both",
         drop_no_dialogue=args.drop_no_dialogue,
+        drop_zero_score=args.drop_zero_score,
         select_features=args.features,
     )
 
@@ -144,8 +154,9 @@ def main() -> None:
     )
 
     save_dataset(X, y, run_dir)
+    save_correlation_matrix(X, y, run_dir)
 
-    results_df = run_nested_cv(
+    results_df, predictions_df = run_nested_cv(
         X=X, y=y, groups=groups,
         model_names=args.models,
         outer_splits=args.outer,
@@ -153,10 +164,14 @@ def main() -> None:
     )
 
     print_summary(results_df, label="both  (exam + assignment)")
+    save_predictions(predictions_df, run_dir)
+    save_prediction_error_plot(predictions_df, run_dir)
 
     best_model_name = results_df["mean_rmse"].idxmin()
+    save_prediction_error_plot(predictions_df, run_dir, model_name=best_model_name)
     fitted = train_final_model(X, y, groups, best_model_name, args.inner)
     save_model(fitted, run_dir / "final_model.pkl")
+    save_feature_importance(fitted, list(X.columns), run_dir)
 
     save_results(
         results_df=results_df,

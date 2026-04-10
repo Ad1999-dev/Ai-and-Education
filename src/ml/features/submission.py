@@ -35,38 +35,24 @@ def build(engine: Engine) -> pd.DataFrame:
     return df
 
 
-import pandas as pd
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
 
-def build_submission_text_features(engine: Engine) -> pd.DataFrame:
-    """
-    MVP: Uses the exact hardcoded query verified in pgAdmin.
-    """
-    # The literal ID for test
-    raw_id = 'user_011bb520-7041-704f-b3e7-ab5c43dd3950'
-    clean_id = '011bb520-7041-704f-b3e7-ab5c43dd3950'
+def build_submission_text_features(engine: Engine, user_ids: list) -> pd.DataFrame:
+
+    ids_str = "', '".join(user_ids)
     
-    query = text(f"""
-        SELECT 
-            user_id, 
-            assignment_id, 
-            extracted_text AS submission_content 
+    query = f"""
+        SELECT user_id, assignment_id, extracted_text AS submission_content
         FROM public.submission_files
-        WHERE user_id = '{raw_id}'
+        WHERE user_id IN ('{ids_str}')
           AND extracted_text IS NOT NULL;
-    """)
-    
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
+    """
+    df = pd.read_sql(query, engine)
     
     if not df.empty:
-        # Normalize the ID in Python so it matches the dialogue DataFrame index
-        df['user_id'] = clean_id
-        
-        # Combine multiple files 
+        # Strip prefix for internal alignment
+        df['user_id'] = df['user_id'].str.replace('user_', '', regex=False)
+        # Group and merge files
         df = df.groupby(["user_id", "assignment_id"])["submission_content"].apply(
             lambda x: "\n".join(x)
         ).to_frame()
-    
     return df

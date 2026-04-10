@@ -195,3 +195,26 @@ def build_categories(engine: Engine) -> pd.DataFrame:
     # print(result.head())
 
     return result
+
+
+
+def build_assignment_embedding_pairs(engine: Engine) -> pd.DataFrame:
+    """
+    Retrieves concatenated (Prompt + Response) pairs for the specific student.
+    Matches the UUID format: '011bb520-7041-704f-b3e7-ab5c43dd3950'
+    """
+    # The literal ID for test
+    target_user_uuid = '011bb520-7041-704f-b3e7-ab5c43dd3950'
+    
+    query = f"""
+        SELECT
+            c.user_id,
+            dt.assignment_id,
+            ARRAY_AGG(dt.prompt || ' ' || COALESCE(dt.response, '') ORDER BY dt.turn_timestamp) AS dialogue_pairs
+        FROM dialogue_turns dt
+        JOIN chats c ON dt.chat_id = c.chat_id
+        WHERE c.user_id = '{target_user_uuid}'
+          AND dt.assignment_id IS NOT NULL
+        GROUP BY c.user_id, dt.assignment_id;
+    """
+    return pd.read_sql(query, engine).set_index(["user_id", "assignment_id"])

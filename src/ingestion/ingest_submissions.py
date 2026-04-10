@@ -40,6 +40,8 @@ def chunked(items: List[Dict], size: int) -> Iterable[List[Dict]]:
 
 
 def extract_user_id(directory_name: str) -> str:
+    if directory_name.startswith("user_"):
+        return directory_name[len("user_"):]
     return directory_name
 
 

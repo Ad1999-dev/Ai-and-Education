@@ -10,7 +10,7 @@ class StudyChatEmbedder:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"--- Initializing StudyChatEmbedder on: {self.device} ---")
         
-        # use_fp16=True is critical for speed on GPU
+
         self.model = BGEM3FlagModel(model_name, use_fp16=use_fp16, device=self.device)
         print(f"--- BGE-M3 Transformer loaded ---")
 
@@ -39,43 +39,55 @@ class StudyChatEmbedder:
 def compute_similarity_features(df_dialogue, df_submission, save_vectors=True):
     embedder = StudyChatEmbedder()
     results = []
-    vector_storage = {} # Dict to hold raw embeddings
+    vector_storage = {}
+    
+    # 1. PRE-ENCODE EVERYTHING IN BULK
+    # Get all unique dialogue turns and submissions across the dataset
+    all_dialogue_text = [item for sublist in df_dialogue['dialogue_pairs'] for item in sublist]
+    all_submission_text = df_submission['submission_content'].tolist()
+    
+    print(f"--- Encoding {len(all_dialogue_text)} dialogue turns in bulk ---")
+    # Batch size 16/32 is safer for 6GB VRAM with BGE-M3
+    diag_res = embedder.model.encode(all_dialogue_text, batch_size=32, max_length=512)
+    diag_all_vecs = torch.tensor(diag_res['dense_vecs']).to(embedder.device)
+    
+    print(f"--- Encoding {len(all_submission_text)} submissions in bulk ---")
+    sub_res = embedder.model.encode(all_submission_text, batch_size=16, max_length=8192)
+    sub_all_vecs = torch.tensor(sub_res['dense_vecs']).to(embedder.device)
 
+    # 2. FAST LOOKUP
+    # Create a mapping so we can find the vectors without re-encoding
+    diag_ptr = 0
     common_indices = df_dialogue.index.intersection(df_submission.index)
 
     for idx in common_indices:
         user_id, assignment_id = idx
         
-        # Handle index data retrieval
-        d_data = df_dialogue.loc[idx]
-        dialogue_list = d_data['dialogue_pairs'] if isinstance(d_data, pd.Series) else d_data.iloc[0]['dialogue_pairs']
+        # Grab pre-computed submission vector
+        s_pos = df_submission.index.get_loc(idx)
+        sub_v = sub_all_vecs[s_pos].view(1, -1)
         
-        s_data = df_submission.loc[idx]
-        submission_text = s_data['submission_content'] if isinstance(s_data, pd.Series) else s_data.iloc[0]['submission_content']
+        # Grab pre-computed dialogue vectors for this specific student/assignment
+        num_turns = len(df_dialogue.loc[idx, 'dialogue_pairs'])
+        diag_vs = diag_all_vecs[diag_ptr : diag_ptr + num_turns]
+        diag_ptr += num_turns
 
-        print(f"Embedding: {assignment_id} | Student: {user_id[:8]}...")
+        # 3. GPU SIMILARITY
+        similarities = torch.mm(sub_v, diag_vs.t())
+        max_sim = float(torch.max(similarities))
+        final_vecs = np.array([v["submission_vector"] for v in vector_storage.values()]) if vector_storage else np.array([])
 
-        # Get the raw vectors and the score
-        sub_v, diag_vs, max_sim = embedder.get_embeddings_and_similarity(submission_text, dialogue_list)
-        
-        # Store metadata and score
         results.append({
             "user_id": user_id,
             "assignment_id": assignment_id,
             "max_similarity_score": max_sim
         })
 
-        # Store the actual 1024-d embeddings
-        if save_vectors and sub_v is not None:
+        if save_vectors:
             vector_storage[f"{user_id}_{assignment_id}"] = {
-                "submission_vector": sub_v,
-                "dialogue_vectors": diag_vs
+                "submission_vector": sub_v.cpu().numpy(),
+                "dialogue_vectors": diag_vs.cpu().numpy()
             }
 
-    # Save raw vectors to a pickle file for later regression/analysis
-    if save_vectors:
-        with open("raw_embeddings.pkl", "wb") as f:
-            pickle.dump(vector_storage, f)
-        print(f"--- Raw embeddings saved to raw_embeddings.pkl ---")
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results) , final_vecs

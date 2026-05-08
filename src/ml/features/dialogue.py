@@ -195,3 +195,17 @@ def build_categories(engine: Engine) -> pd.DataFrame:
     # print(result.head())
 
     return result
+
+
+
+def build_assignment_embedding_pairs(engine: Engine, user_ids: list) -> pd.DataFrame:
+    ids_str = "', '".join(user_ids)
+    query = f"""
+        SELECT c.user_id, dt.assignment_id,
+               ARRAY_AGG(dt.prompt || ' ' || COALESCE(dt.response, '') ORDER BY dt.turn_timestamp) AS dialogue_pairs
+        FROM dialogue_turns dt
+        JOIN chats c ON dt.chat_id = c.chat_id
+        WHERE c.user_id IN ('{ids_str}')
+        GROUP BY c.user_id, dt.assignment_id;
+    """
+    return pd.read_sql(query, engine).set_index(["user_id", "assignment_id"])

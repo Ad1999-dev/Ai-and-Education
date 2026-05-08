@@ -33,3 +33,26 @@ def build(engine: Engine) -> pd.DataFrame:
     df = pd.read_sql(query, engine).set_index(["user_id", "assessment_id"])
     # df["sub_has_submission"] = 1
     return df
+
+
+
+def build_submission_text_features(engine: Engine, user_ids: list) -> pd.DataFrame:
+
+    ids_str = "', '".join(user_ids)
+    
+    query = f"""
+        SELECT user_id, assignment_id, extracted_text AS submission_content
+        FROM public.submission_files
+        WHERE user_id IN ('{ids_str}')
+          AND extracted_text IS NOT NULL;
+    """
+    df = pd.read_sql(query, engine)
+    
+    if not df.empty:
+        # Strip prefix for internal alignment
+        df['user_id'] = df['user_id'].str.replace('user_', '', regex=False)
+        # Group and merge files
+        df = df.groupby(["user_id", "assignment_id"])["submission_content"].apply(
+            lambda x: "\n".join(x)
+        ).to_frame()
+    return df

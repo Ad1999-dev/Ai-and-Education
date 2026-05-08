@@ -10,7 +10,6 @@ Pipeline sizes (approximate, assuming 181 students):
 """
 import pandas as pd
 from sqlalchemy.engine import Engine
-
 from src.ml.config import EXAM_ASSESSMENT_CODES, ASSIGNMENT_ASSESSMENT_CODES
 
 PIPELINE_CODES: dict[str, list[str]] = {

@@ -89,5 +89,4 @@ def compute_similarity_features(df_dialogue, df_submission, save_vectors=True):
                 "dialogue_vectors": diag_vs.cpu().numpy()
             }
 
-
     return pd.DataFrame(results) , final_vecs

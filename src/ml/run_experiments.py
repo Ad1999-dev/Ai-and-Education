@@ -1,18 +1,32 @@
 """Batch experiment runner.
 
 Calls run_training_{pipeline}.py as a subprocess once per variant.
-All logic stays in the run_training scripts — this file is a shortcut for
-sweeping over feature combinations and the drop-no-dialogue cleaning option.
+
+Three models are compared (matching the paper structure):
+
+    Model 1 — Baseline
+        Input:  grade_prior_avg  (running average of prior assessment scores)
+        Output: current assessment score
+
+    Model 2 — Baseline + total chatbot usage
+        Input:  grade_prior_avg, dlg_n_turns
+        Output: current assessment score
+
+    Model 3 — Baseline + 8 dialogue-act counts + proportions
+        Input:  grade_prior_avg, 8 DA counts, 8 DA proportions
+        Output: current assessment score
+
+Each model is run across 4 data-cleaning variants:
+    all_students   — no cleaning
+    active_only    — drop rows with zero dialogue activity
+    nonzero_score  — drop rows where score == 0
+    active_nonzero — both cleaning steps
 
 To configure a run:
   1. Set PIPELINE_TYPE, ASSESSMENT_ENCODING, OUTER_SPLITS, INNER_SPLITS at the top.
-  2. Toggle groups on/off in FEATURE_GROUPS (True = include in sweep).
-  3. Run:
+  2. Run:
         python -m src.ml.run_experiments
-        python -m src.ml.run_experiments --outer 10 --inner 5 --output results/
-
-Each variant name is  <group_name>__all_students  or  <group_name>__active_only.
-Results land in  results/exp_<pipeline>_YYYYMMDD_HHMMSS/<variant_name>/.
+        python -m src.ml.run_experiments --outer 5 --inner 5 --output results/
 """
 # ===========================================================================
 # TOP-LEVEL CONFIGURATION
@@ -33,23 +47,10 @@ MODELS: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
-# Feature groups.
-# Set a group's value to True to include it in the sweep, False to skip.
-#
-# Full selectable column pool:
-#   dlg_n_turns, dlg_n_chats
-#   dlg_total_prompt_chars, dlg_avg_prompt_chars
-#   dlg_total_response_chars, dlg_avg_response_chars
-#   dlg_cat_conceptual_questions_count/pct
-#   dlg_cat_contextual_questions_count/pct
-#   dlg_cat_editing_request_count/pct
-#   dlg_cat_misc_count/pct
-#   dlg_cat_off_topic_count/pct
-#   dlg_cat_provide_context_count/pct
-#   dlg_cat_verification_count/pct
-#   dlg_cat_writing_request_count/pct
-#   sub_has_submission
+# Feature groups — one entry per model (1, 2, 3)
 # ---------------------------------------------------------------------------
+
+_PRIOR    = ["grade_prior_avg"]
 
 _CAT_COUNT = [
     "dlg_cat_conceptual_questions_count",
@@ -71,64 +72,23 @@ _CAT_PCT = [
     "dlg_cat_verification_pct",
     "dlg_cat_writing_request_pct",
 ]
-_COUNTS   = ["dlg_n_turns", "dlg_n_chats"]
-_PROMPT   = ["dlg_total_prompt_chars", "dlg_avg_prompt_chars"]
-_RESPONSE = ["dlg_total_response_chars", "dlg_avg_response_chars"]
-_LENGTHS  = _PROMPT + _RESPONSE
-_SUB      = ["sub_has_submission"]
 
-FEATURE_GROUPS: dict[str, list[str] | None] = {
-    # None = keep all available columns (no --features flag passed)
-    "all":                    None,
+FEATURE_GROUPS: dict[str, list[str]] = {
+    # Model 1 — baseline: running average of prior scores only
+    "model1_baseline":    _PRIOR,
 
-    # --- Volume of usage ---
-    "counts":                 _COUNTS,
-    "prompt_length":          _PROMPT,
-    "response_length":        _RESPONSE,
-    "lengths":                _LENGTHS,
-    "counts_lengths":         _COUNTS + _LENGTHS,
+    # Model 2 — baseline + total chatbot usage volume
+    "model2_turns":       _PRIOR + ["dlg_n_turns", "dlg_n_chats"],
 
-    # --- Nature of usage (label proportions) ---
-    "cat_pct":                _CAT_PCT,
-    "cat_count":              _CAT_COUNT,
-    "cat_all":                _CAT_COUNT + _CAT_PCT,
+    # Model 3 — baseline + 8 dialogue-act raw counts
+    "model3_da_counts":   _PRIOR + _CAT_COUNT,
 
-    # --- Combined ---
-    "counts_cat_pct":         _COUNTS + _CAT_PCT,
-    "counts_cat_all":         _COUNTS + _CAT_COUNT + _CAT_PCT,
-    "counts_lengths_cat_pct": _COUNTS + _LENGTHS + _CAT_PCT,
-    "counts_lengths_cat_all": _COUNTS + _LENGTHS + _CAT_COUNT + _CAT_PCT,
-
-    # --- With submission flag ---
-    "all_with_sub":           None,   # None → all columns including sub_has_submission
-    "counts_sub":             _COUNTS + _SUB,
-    "counts_lengths_sub":     _COUNTS + _LENGTHS + _SUB,
-}
-
-# Toggle groups: set False to skip without deleting the entry
-_ENABLED: dict[str, bool] = {
-    "all":                    True,
-    "counts":                 True,
-    "prompt_length":          True,
-    "response_length":        True,
-    "lengths":                True,
-    "counts_lengths":         True,
-    "cat_pct":                True,
-    "cat_count":              True,
-    "cat_all":                True,
-    "counts_cat_pct":         True,
-    "counts_cat_all":         True,
-    "counts_lengths_cat_pct": True,
-    "counts_lengths_cat_all": True,
-    "all_with_sub":           True,
-    "counts_sub":             True,
-    "counts_lengths_sub":     True,
+    # Model 4 — baseline + volume + 8 dialogue-act proportions
+    "model4_turns_da_pct": _PRIOR + ["dlg_n_turns", "dlg_n_chats"] + _CAT_PCT,
 }
 
 # ===========================================================================
-# Auto-generate variants:
-#   each enabled group × {all_students, active_only}
-#   × {with_zeros, nonzero_score}  (only when SWEEP_ZERO_SCORE=True)
+# Auto-generate variants: each model × 4 cleaning combos
 # ===========================================================================
 
 _CLEANING_COMBOS = [
@@ -147,7 +107,6 @@ VARIANTS: list[dict] = [
         "features":         FEATURE_GROUPS[group],
     }
     for group in FEATURE_GROUPS
-    if _ENABLED.get(group, True)
     for suffix, drop_dlg, drop_zero in _CLEANING_COMBOS
 ]
 

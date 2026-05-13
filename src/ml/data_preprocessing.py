@@ -6,15 +6,15 @@ which columns reach the model.
 
 NaN semantics
 -------------
-- dlg_* / sub_* columns : filled with 0 after all joins (zero activity, not missing).
-
-Grade scores (a1–a7, e1–e3) are the prediction targets only and must never
-appear as input features.
+- dlg_* / sub_* columns  : filled with 0 after all joins (zero activity, not missing).
+- grade_prior_avg         : left as NaN when no prior scores exist (e.g. a1).
+                            Handled by SimpleImputer(strategy="median") inside the
+                            sklearn Pipeline — never zero-filled.
 """
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from src.ml.features import dialogue, submission
+from src.ml.features import dialogue, prior_grades, submission
 
 _ZERO_FILL_PREFIXES = ("dlg_", "sub_")
 
@@ -55,6 +55,10 @@ def build_dataset(
     # Build and join all feature blocks (all indexed by (user_id, assessment_id))
     # ------------------------------------------------------------------
     X: pd.DataFrame = base[[]].copy()
+
+    pg_df = prior_grades.build(engine)
+    X = X.join(pg_df, how="left")
+    # grade_prior_avg intentionally left as NaN where no prior scores exist
 
     dlg_cl = dialogue.build_counts_lengths(engine)
     X = X.join(dlg_cl, how="left")

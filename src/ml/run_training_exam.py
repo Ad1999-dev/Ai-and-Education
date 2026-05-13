@@ -103,6 +103,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--assessments",
+        nargs="+", default=None, metavar="CODE",
+        dest="assessments",
+        help=(
+            "Restrict prediction to specific exam codes "
+            f"(default: all {EXAM_ASSESSMENT_CODES}). "
+            "Example: --assessments e1 e2"
+        ),
+    )
+    parser.add_argument(
         "--models",
         nargs="+", default=None, metavar="MODEL",
         help=f"Subset of models to evaluate. Available: {list(cfg.MODEL_REGISTRY)}",
@@ -127,7 +137,10 @@ def main() -> None:
     engine = load_engine()
     run_dir = make_run_dir(args.output, pipeline_type="exam")
 
-    base = data_loader.load_base_frame(engine, pipeline_type="exam")
+    assessment_codes = args.assessments or EXAM_ASSESSMENT_CODES
+    base = data_loader.load_base_frame(
+        engine, pipeline_type="exam", assessment_codes=assessment_codes,
+    )
 
     X, y, groups = data_preprocessing.build_dataset(
         engine=engine,
@@ -139,7 +152,7 @@ def main() -> None:
     )
 
     X = feature_engineering.engineer_features(
-        X, encoding=args.encoding, expected_codes=EXAM_ASSESSMENT_CODES,
+        X, encoding=args.encoding, expected_codes=assessment_codes,
     )
 
     save_dataset(X, y, run_dir)
@@ -152,7 +165,8 @@ def main() -> None:
         inner_splits=args.inner,
     )
 
-    print_summary(results_df, label="exam  (e1+e2+e3)")
+    label = "exam  (" + "+".join(assessment_codes) + ")"
+    print_summary(results_df, label=label)
     save_predictions(predictions_df, run_dir)
     save_prediction_error_plot(predictions_df, run_dir)
 
@@ -166,7 +180,7 @@ def main() -> None:
         results_df=results_df,
         output_dir=run_dir,
         pipeline_type="exam",
-        assessment_codes=EXAM_ASSESSMENT_CODES,
+        assessment_codes=assessment_codes,
         outer_splits=args.outer,
         inner_splits=args.inner,
         n_samples=len(X),
@@ -181,7 +195,7 @@ def main() -> None:
         run_dir=run_dir,
         results_df=results_df,
         pipeline_type="exam",
-        assessment_codes=EXAM_ASSESSMENT_CODES,
+        assessment_codes=assessment_codes,
         outer_splits=args.outer,
         inner_splits=args.inner,
         n_samples=len(X),

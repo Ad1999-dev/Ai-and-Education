@@ -20,13 +20,21 @@ PIPELINE_CODES: dict[str, list[str]] = {
 }
 
 
-def load_base_frame(engine: Engine, pipeline_type: str) -> pd.DataFrame:
+def load_base_frame(
+    engine: Engine,
+    pipeline_type: str,
+    assessment_codes: list[str] | None = None,
+) -> pd.DataFrame:
     """Return the long-format base DataFrame.
 
     Parameters
     ----------
-    engine        : SQLAlchemy engine connected to the studychat database.
-    pipeline_type : "exam", "assignment", or "both".
+    engine            : SQLAlchemy engine connected to the studychat database.
+    pipeline_type     : "exam", "assignment", or "both".
+    assessment_codes  : Optional override — restrict to these specific assessment
+                        codes (e.g. ["e1", "e2"] to predict only the first two
+                        exams).  Must be a subset of the pipeline's default codes.
+                        If None, all codes for the pipeline type are used.
 
     Returns
     -------
@@ -44,7 +52,17 @@ def load_base_frame(engine: Engine, pipeline_type: str) -> pd.DataFrame:
             f"pipeline_type must be one of {list(PIPELINE_CODES)}, got '{pipeline_type}'"
         )
 
-    codes = PIPELINE_CODES[pipeline_type]
+    if assessment_codes is not None:
+        unknown = set(assessment_codes) - set(PIPELINE_CODES[pipeline_type])
+        if unknown:
+            raise ValueError(
+                f"assessment_codes {sorted(unknown)} are not valid for "
+                f"pipeline '{pipeline_type}'. "
+                f"Allowed: {PIPELINE_CODES[pipeline_type]}"
+            )
+        codes = assessment_codes
+    else:
+        codes = PIPELINE_CODES[pipeline_type]
     placeholders = ", ".join(f"'{c}'" for c in codes)
 
     query = f"""

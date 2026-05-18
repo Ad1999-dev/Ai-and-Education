@@ -1,7 +1,8 @@
 # AI and Education
 PROJ0021 Data science project
 
-**Research question**: do students who use an LLM assistant on assignments perform differently on exams (no LLM)?
+**Research question**: Does analysing student-LLM interactions through a ML cognitive engagement framework provide greater predictive power for closed-book exam performance than the frequency-based dialogue act representation used by McNichols et al. [1]?
+?
 
 ---
 

@@ -143,6 +143,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+dsp/
 
 # Spyder project settings
 .spyderproject
@@ -205,3 +206,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Claude Code — local-only / generated files
+.claude/CLAUDE.local.md
+.claude/settings.local.json
+.claude/cache/
+.claude/todos/
+.claude/__pycache__/
+.claude/
+CLAUDE.md
+
+# Processed data (may contain PII)
+data/processed/

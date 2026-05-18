@@ -1,18 +1,3 @@
-"""Feature engineering: encode assessment identity and finalise the feature matrix.
-
-The `assessment_code` column (carried from data_preprocessing) is consumed here
-and never exposed to the sklearn preprocessor.  All other columns pass through.
-
-Encoding strategies
--------------------
-ONE_HOT  : pd.get_dummies → binary column per assessment code.
-           Columns are sorted and padded with zeros so that the set is stable
-           across CV folds even if a fold is missing one assessment code.
-ORDINAL  : single integer column `assess_ordinal` (lexicographic order within
-           the set of codes present in X).
-NONE     : assessment identity is dropped; model has no explicit knowledge of
-           which exam/assignment it is predicting.
-"""
 import pandas as pd
 
 from src.ml.config import AssessmentEncoding

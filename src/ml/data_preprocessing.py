@@ -1,22 +1,9 @@
-"""Assemble the design matrix X, target vector y, and group labels.
-
-The base frame (from data_loader) is the spine: one row per (student, assessment).
-All feature blocks are always built and joined; use select_features to restrict
-which columns reach the model.
-
-NaN semantics
--------------
-- dlg_* / sub_* columns : filled with 0 after all joins (zero activity, not missing).
-
-Grade scores (a1–a7, e1–e3) are the prediction targets only and must never
-appear as input features.
-"""
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from src.ml.features import dialogue, submission
+from src.ml.features import dialogue, prior_grades, similarity, submission
 
-_ZERO_FILL_PREFIXES = ("dlg_", "sub_")
+_ZERO_FILL_PREFIXES = ("dlg_", "sub_", "sim_")
 
 
 def build_dataset(
@@ -24,6 +11,7 @@ def build_dataset(
     base: pd.DataFrame,
     pipeline_type: str,
     drop_no_dialogue: bool = False,
+    drop_zero_score: bool = False,
     select_features: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """Merge all feature blocks onto the base frame.
@@ -35,6 +23,9 @@ def build_dataset(
     pipeline_type    : "exam", "assignment", or "both".
     drop_no_dialogue : If True, remove rows where the student had zero dialogue
                        activity during that assessment period (all dlg_* == 0).
+    drop_zero_score  : If True, remove rows where the student's score is exactly 0
+                       (i.e. did not submit / received no credit).  Distinct from
+                       NULL rows, which are already excluded by data_loader.
     select_features  : If provided, keep only these columns from X (plus the
                        structural columns assessment_code / is_exam which are
                        always kept).  Raises ValueError for unknown column names.
@@ -52,6 +43,10 @@ def build_dataset(
     # ------------------------------------------------------------------
     X: pd.DataFrame = base[[]].copy()
 
+    pg_df = prior_grades.build(engine)
+    X = X.join(pg_df, how="left")
+    # grade_prior_avg intentionally left as NaN where no prior scores exist
+
     dlg_cl = dialogue.build_counts_lengths(engine)
     X = X.join(dlg_cl, how="left")
 
@@ -61,6 +56,9 @@ def build_dataset(
 
     sub_df = submission.build(engine)
     X = X.join(sub_df, how="left")
+
+    sim_df = similarity.build(engine)
+    X = X.join(sim_df, how="left")
 
     # Debugging - save as CSV for manual inspection
     X.to_csv("debug_X_pre_feature_engineering.csv")
@@ -76,6 +74,17 @@ def build_dataset(
 
     # Debugging - check for any remaining NaNs
     X.to_csv("debug_X_after_zero_fill.csv")
+
+    # ------------------------------------------------------------------
+    # Optional: drop rows where the student received a score of exactly 0
+    # (non-submission recorded as 0, not NULL)
+    # ------------------------------------------------------------------
+    if drop_zero_score:
+        nonzero_mask = base["target"] != 0
+        n_dropped = int((~nonzero_mask).sum())
+        X = X[nonzero_mask]
+        base = base.loc[nonzero_mask]
+        print(f"[data_preprocessing] drop_zero_score: removed {n_dropped} rows with score == 0")
 
     # ------------------------------------------------------------------
     # Optional: drop rows with no dialogue activity during the assessment

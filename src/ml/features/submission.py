@@ -1,9 +1,3 @@
-"""Submission feature block.
-
-Stats for the single submission linked to each assessment's assignment_id.
-Returned DataFrame is indexed by (user_id, assessment_id).
-Exam assessments have no linked assignment_id → NaN after join → 0-filled.
-"""
 import pandas as pd
 from sqlalchemy.engine import Engine
 

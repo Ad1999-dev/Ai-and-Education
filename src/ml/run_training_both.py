@@ -1,58 +1,3 @@
-"""Train models to predict all scores in a single unified model.
-
-Dataset: one row per (student, assessment) for both exams and assignments
-         → up to (181 × 3) + (181 × 6) = 1629 rows.
-
-One target column (normalized_score) covers both exam and assignment scores.
-Two extra features help the model distinguish contexts:
-    is_exam        — 1 for exam rows, 0 for assignment rows
-    assess_*       — one-hot (or ordinal) assessment identity
-
-Grade features (a1–a7) are present on exam rows only.
-Assignment rows have grade features set to NaN (circular leakage guard).
-
-Output is written to a timestamped subdirectory of --output:
-    results/both_YYYYMMDD_HHMMSS/
-        dataset.csv        — features + target passed to the model
-        results.csv        — per-model RMSE across outer folds
-        run_summary.json   — full run metadata
-        final_model.pkl    — best model trained on the full dataset
-
-Arguments
----------
-    --encoding      one_hot | ordinal | none (default: none)
-                    How to encode assessment identity (e1–e3, a2–a7).
-    --drop-no-dialogue
-                    Drop rows where the student had zero LLM activity for
-                    that specific assessment period.
-    --features COL [COL ...]
-                    Exact column names to pass to the model.
-                    Structural columns (assessment_code, is_exam) are always kept.
-                    Omit to use all available columns.
-    --models MODEL [MODEL ...]
-                    Subset of models to evaluate.
-                    Available: ridge, elastic_net, random_forest,
-                               gradient_boosting, svr
-                    Default: all models.
-    --outer K       Number of outer GroupKFold splits (default: 5).
-    --inner K       Number of inner GroupKFold splits for hyperparameter
-                    search (default: 5).
-    --output PATH   Base directory for run subdirectories (default: results/).
-
-Usage
------
-    # Minimal — all defaults
-    python -m src.ml.run_training_both
-
-    # Full args example
-    python -m src.ml.run_training_both \
-        --encoding one_hot \
-        --drop-no-dialogue \
-        --features dlg_n_turns dlg_n_chats dlg_avg_prompt_chars \
-        --models ridge random_forest \
-        --outer 10 --inner 5 \
-        --output results/
-"""
 import argparse
 from pathlib import Path
 
@@ -69,8 +14,12 @@ from src.ml.model_training import (
     make_run_dir,
     print_summary,
     run_nested_cv,
+    save_correlation_matrix,
     save_dataset,
+    save_feature_importance,
     save_model,
+    save_prediction_error_plot,
+    save_predictions,
     save_results,
     train_final_model,
 )
@@ -91,6 +40,11 @@ def parse_args() -> argparse.Namespace:
         "--drop-no-dialogue",
         action="store_true", dest="drop_no_dialogue",
         help="Drop rows where the student had zero dialogue activity for that assessment",
+    )
+    parser.add_argument(
+        "--drop-zero-score",
+        action="store_true", dest="drop_zero_score",
+        help="Drop rows where the student received a score of exactly 0 (non-submission)",
     )
     parser.add_argument(
         "--features",
@@ -136,6 +90,7 @@ def main() -> None:
         base=base,
         pipeline_type="both",
         drop_no_dialogue=args.drop_no_dialogue,
+        drop_zero_score=args.drop_zero_score,
         select_features=args.features,
     )
 
@@ -144,8 +99,9 @@ def main() -> None:
     )
 
     save_dataset(X, y, run_dir)
+    save_correlation_matrix(X, y, run_dir)
 
-    results_df = run_nested_cv(
+    results_df, predictions_df = run_nested_cv(
         X=X, y=y, groups=groups,
         model_names=args.models,
         outer_splits=args.outer,
@@ -153,10 +109,14 @@ def main() -> None:
     )
 
     print_summary(results_df, label="both  (exam + assignment)")
+    save_predictions(predictions_df, run_dir)
+    save_prediction_error_plot(predictions_df, run_dir)
 
     best_model_name = results_df["mean_rmse"].idxmin()
+    save_prediction_error_plot(predictions_df, run_dir, model_name=best_model_name)
     fitted = train_final_model(X, y, groups, best_model_name, args.inner)
     save_model(fitted, run_dir / "final_model.pkl")
+    save_feature_importance(fitted, list(X.columns), run_dir)
 
     save_results(
         results_df=results_df,

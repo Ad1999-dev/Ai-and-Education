@@ -1,4 +1,3 @@
-"""Shared database utilities for the ML module."""
 import os
 from pathlib import Path
 

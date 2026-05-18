@@ -1,4 +1,3 @@
-"""Print row counts for every table in the studychat database."""
 from pathlib import Path
 
 from dotenv import load_dotenv

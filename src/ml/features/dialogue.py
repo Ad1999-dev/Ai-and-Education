@@ -1,18 +1,3 @@
-"""Dialogue feature block.
-
-Aggregates dialogue turns per (user_id, assessment_id):
-
-  Assignment rows  — turns where dialogue_turns.assignment_id links to
-                     the assessment's own assignment_id (via assessments table).
-  Exam e1/e2 rows  — turns where dialogue_turns.exam_id equals the assessment_id.
-  Exam e3 rows     — ALL assignment turns for the student in that semester
-                     (a1–a7 combined), linked to the e3 assessment via
-                     assessments.assessment_code = 'e3'.
-
-Returned DataFrames are indexed by (user_id, assessment_id).
-Assessment rows with no matching turns receive NaN → filled with 0 in
-data_preprocessing.
-"""
 import pandas as pd
 from sqlalchemy.engine import Engine
 
